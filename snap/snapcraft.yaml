@@ -1,0 +1,107 @@
+name: spicule-webspoon
+version: '8.0'
+summary: Webspoon web based ETL infrastructure
+description: |
+    Webspoon is the Web based version of Pentaho Data Integration maintained by Hiromu Hota.
+    This snap will install Webspoon in a Tomcat webserver and provide a confined ETL experience.
+grade: devel
+confinement: devmode
+
+apps:
+    webspoon:
+      command: tomcat-launch
+      daemon: simple
+      plugs: [network,network-bind]
+
+parts:
+    rap1:
+          plugin: x_maven_noartifacts
+          source: https://github.com/HiromuHota/rap.git
+          source-type: git
+          source-branch: webspoon-3.3.0
+          maven-options: [-DskipTests -Dcheckstyle.skip -N]
+          after: [pentaho-xul]
+    rap2:
+          plugin: x_maven_noartifacts_recursive
+          source: https://github.com/HiromuHota/rap.git
+          source-type: git
+          source-branch: webspoon-3.3.0
+          maven-options: [-pl, bundles/org.eclipse.rap.rwt, -am]
+          after: [rap1]
+
+    rap3:                                                                                                                                                                                                                                                                                                                                                                                                                                                                               
+          plugin: x_maven_noartifacts_recursive                                                                                                                                                                                                                                                                                                                                                                                                                                                  
+          source: https://github.com/HiromuHota/rap.git                                                                                                                                                                                                                                                                                                                                                                                                                               
+          source-type: git                                                                                                                                                                                                                                                                                                                                                                                                                                                             
+          source-branch: webspoon-3.3.0                                                                                                                                                                                                                                                                                                                                                                                                                                                 
+          maven-options: [-pl, bundles/org.eclipse.rap.jface, -am]                                                                                                                                                                                                                                                                                                                                                                                           
+          after: [rap2] 
+
+    rap4:                                                                                                                                                                                                                                                                                                                                                                                                                                                                                
+          plugin: x_maven_noartifacts_recursive                                                                                                                                                                                                                                                                                                                                                                                                                                          
+          source: https://github.com/HiromuHota/rap.git                                                                                                                                                                                                                                                                                                                                                                                                                                     
+          source-type: git                                                                                                                                                                                                                                                                                                                                                                                                                                                               
+          source-branch: webspoon-3.3.0                                                                                                                                                                                                                                                                                                                                                                                                                                                   
+          maven-options: [-pl, bundles/org.eclipse.rap.fileupload, -am]                                                                                                                                                                                                                                                                                                                                                                                             
+          after: [rap3] 
+
+    rap5:                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    
+          plugin: x_maven_noartifacts_recursive                                                                                                                                                                                                                                                                                                                                                                                                                                                        
+          source: https://github.com/HiromuHota/rap.git                                                                                                                                                                                                                                                                                                                                                                                                                                      
+          source-type: git                                                                                                                                                                                                                                                                                                                                                                                                                                                                   
+          source-branch: webspoon-3.3.0                                                                                                                                                                                                                                                                                                                                                                                                                                                      
+          maven-options: [-pl, bundles/org.eclipse.rap.filedialog, -am]                                                                                                                                                                                                                                                                                                                                                                                                 
+          after: [rap4] 
+
+    rap6:                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    
+          plugin: x_maven_noartifacts_recursive                                                                                                                                                                                                                                                                                                                                                                                                                                              
+          source: https://github.com/HiromuHota/rap.git                                                                                                                                                                                                                                                                                                                                                                                                                                      
+          source-type: git                                                                                                                                                                                                                                                                                                                                                                                                                                                                   
+          source-branch: webspoon-3.3.0                                                                                                                                                                                                                                                                                                                                                                                                                                                      
+          maven-options: [-pl, tests/org.eclipse.rap.rwt.testfixture, -am]                                                                                                                                                                                                                                                                                                                                                                                                 
+          after: [rap5]
+
+    pentaho-xul:
+          plugin: ant
+          source: https://github.com/HiromuHota/pentaho-commons-xul.git
+          source-branch: webspoon-8.0
+          source-subdir: pentaho-xul-swt
+          ant-build-targets: [clean-all, resolve, publish-local]
+
+          
+    pentaho:
+          plugin: x_maven
+          source: https://github.com/HiromuHota/pentaho-kettle.git
+          source-type: git
+          source-branch: webspoon-8.0
+          #source-branch: master
+          maven-options: [-pl, assemblies/pdi-ce]
+          maven-targets: [assemblies/pdi-ce]
+          install: |
+              mkdir -p $SNAPCRAFT_PART_INSTALL/webapps/spoon
+              unzip $SNAPCRAFT_PART_INSTALL/war/spoon.war -d $SNAPCRAFT_PART_INSTALL/webapps/spoon
+              rm -rf $SNAPCRAFT_PART_INSTALL/war/spoon.war
+          after: [tomcat, pentaho-xul, rap6]
+
+    tomcat:
+        plugin: ant
+        source: http://svn.apache.org/repos/asf/tomcat/tc8.5.x/trunk/
+        source-type: svn
+        prepare: |
+          cp build.properties.default build.properties
+        install: |
+          cp -r output/build/* $SNAPCRAFT_PART_INSTALL
+          cat <<EOF > $SNAPCRAFT_PART_INSTALL/tomcat-launch
+          #!/bin/sh
+          export JRE_HOME=\${SNAP}/usr/lib/jvm/default-java/jre
+          export JAVA_HOME=\${SNAP}/usr/lib/jvm/default-java/jre
+          export CATALINA_HOME=\${SNAP}
+          export CATALINA_BASE=\${SNAP_DATA}
+          export CATALINA_TMPDIR=/tmp
+          export HOME=\${SNAP_USER_DATA}
+          export _JAVA_OPTIONS=-Duser.home=\${SNAP_USER_DATA}
+          cp -rn \${CATALINA_HOME}/conf \${CATALINA_BASE}/
+          cp -rn \${CATALINA_HOME}/webapps \${CATALINA_BASE}/
+          exec \${CATALINA_HOME}/bin/catalina.sh run
+          EOF
+          chmod +x $SNAPCRAFT_PART_INSTALL/tomcat-launch
